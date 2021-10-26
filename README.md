@@ -11,19 +11,38 @@ Containers for the website and php-fpm require shared access to html and php cod
 
 Mysql database uses persistent storage for the database
 
-## Components required
+## Components
 - Persistent Volume/Persistent Volume Claim for mysql database
 - Persistent Volume/Persistent Volume Claim for shared access to php/web files
 - webserver Pod (image: nginx:alpine)
 - php-fpm Pod (image: bitnami/php-fpm:7.4)
-- mysql Pod (image: mysql-80
+- mysql Pod (image: mysql:8.0)
 - configMap containing the following data:
   - nginx.conf (replaces image-supplied config)
   - default.conf (replaces image-supplied config)
-  - settings.php (pre-configured with connectivity settings)
+  - settings.php (pre-configured with connectivity settings for mysql)
 - php-fpm Service exposing port 9000
 - webserver Service exposing ports 8081 (http) and 3000 (api)
 - mysql Service exposing port 3306
 - webserver Route for http
 - webserver Route for api (optional)
+
+
+## Requirements
+- OpenShift Container Platform 4.6+
+- git 
+
+Read/Execute required for all files/directories in generatedata/
+  chown 101:101 -R generatedata/
+	chmod 755 -R generatedata/
+
+Read/Write/Execute required for web/cache/
+	chmod 777 -R generatedata/cache/
+
+-- there may be a more restrictive setting as only generatedata/cache requires write, but this worked to get functional
+
+semanage fcontext -a -t httpd_sys_rw_content_t "{sharedpath}/generatedata(/.*)?"
+restorecon -Rv {sharedpath}/generatedata
+
+
 
