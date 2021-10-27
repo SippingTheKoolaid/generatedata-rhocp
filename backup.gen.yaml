@@ -22,14 +22,6 @@ items:
         name: mysql
         ports:
         - containerPort: 3306
-        volumeMounts:
-        - hostPath: /
-          mountPath: /var/lib/mysql
-          name: mysql-data
-      volumes:
-      - name: mysql-data
-        persistentVolumeClaim:
-          claimName: mysql-pvc
 - apiVersion: v1
   data:
     default.conf: |
@@ -158,37 +150,20 @@ items:
         subPath: www.conf
     initContainers:
     - command:
-      - /bin/bash
+      - /bin/sh
       - -c
       - |
-        echo "updating www.conf"
         sed -e 's/;request_terminate_timeout = 0/request_terminate_timeout = 5m/g' /opt/bitnami/php/etc/php-fpm.d/www.conf > /configs/www.conf
-        echo "updating php.ini"
         sed -e 's/max_execution_time = 30/max_execution_time = 300/g' /opt/bitnami/php/etc/php.ini > /configs/php.ini
-        cd /
-        if [ -n "$(ls -A /generatedata-3.4.1 2>/dev/null)" ] 
-        then 
-          echo "Files exist, no download needed" 
-        else
-          echo "No files on shared volume, retrieving v3.4.1 from github"
-          wget https://github.com/benkeen/generatedata/archive/refs/tags/3.4.1.tar.gz
-          tar -xvf 3.4.1.tar.gz
-        fi
-        echo "Settings shared volume files to read/execute for everyone"
-        #  chmod -Rv 755 /generatedata-3.4.1
-        echo "Setting shared volume cache directory to read/write/execute for everyone"
-        chmod -Rv 777 /generatedata-3.4.1/cache
       image: bitnami/php-fpm:7.4
       name: updateconf
       volumeMounts:
       - mountPath: /configs
         name: php-config
-      - mountPath: /generatedata-3.4.1
-        name: nfs-volume
     volumes:
     - name: nfs-volume
       persistentVolumeClaim:
-        claimName: webserver-pvc
+        claimName: gendata-pvc
     - emptyDir: {}
       name: php-config
 - apiVersion: v1
@@ -218,15 +193,13 @@ items:
       - /bin/sh
       - -c
       - |
-        cd /app
-        if [ -f "settings.php" ] 
-        then 
-          echo "settings.php file exists, it will not be updated" 
-        else
-          echo "settings.php missing, adding settings.php to shared volume for all containers to use"
-          cp -fv /php/settings.php /app/settings.php
-          chmod -Rv 755 /app/settings.php
-        fi
+        yum install -y git
+        git clone https://github.com/SippingTheKoolaid/generatedata.git
+        cp -Rn ./generatedata /app
+        cp -f /php/settings.php /app/settings.php
+        chown -R nginx:nginx /app
+        chmod -R 755 /app
+        chmod -R 777 /app/cache
       image: nginx:alpine
       name: updatephp
       volumeMounts:
@@ -239,7 +212,7 @@ items:
     volumes:
     - name: nfs-volume
       persistentVolumeClaim:
-        claimName: webserver-pvc
+        claimName: gendata-pvc
     - emptyDir: {}
       name: update-php
     - configMap:
@@ -311,21 +284,5 @@ items:
       primary: generate_data
     sessionAffinity: None
     type: ClusterIP
-- apiVersion: route.openshift.io/v1
-  kind: Route
-  metadata:
-    labels:
-      app: webserver
-      primary: generate_data
-    name: webserver
-  spec:
-    host: generate-data.mycluster-dal10-b3-552823-32473ca4d3b4f0bf6716e23f5ecf4388-0000.us-south.containers.appdomain.cloud
-    port:
-      targetPort: 8081
-    to:
-      kind: Service
-      name: webserver
-      weight: 100
-    wildcardPolicy: None
 kind: List
 metadata: {}

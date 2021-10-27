@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: Pod
+metadata:
+    labels:
+      app: webserver
+      primary: generate_data
+    name: webserver
+spec:
+    containers:
+    - image: nginx:alpine
+      name: webserver
+      ports:
+      - containerPort: 8081
+      volumeMounts:
+      - hostPath: /
+        mountPath: /application
+        name: nfs-volume
+      - mountPath: /etc/nginx/nginx.conf
+        name: nginx-config
+        subPath: nginx.conf
+      - mountPath: /etc/nginx/conf.d
+        name: default-config
+    initContainers:
+    - command:
+      - /bin/bash
+      - -c
+      - |
+        git clone https://github.com/SippingTheKoolaid/generatedata.git /
+        cp -f /php/settings.php /generatedata/settings.php
+        chown -R 0:0 /generatedata
+        chmod -R 755 /generatedata
+        chmod -R 777 /generatedata/cache
+      image: bitnami/git
+      name: updatephp
+      volumeMounts:
+      - hostPath: /
+        mountPath: /generatedata
+        name: init-volume
+      - mountPath: /php/settings.php
+        name: php-settings
+        subPath: settings.php
+    volumes:
+    - name: init-volume
+      persistentVolumeClaim:
+        claimName: webserver-pvc
+    - name: nfs-volume
+      persistentVolumeClaim:
+        claimName: webserver-pvc
+    - configMap:    
+        items:
+        - key: nginx.conf
+          path: nginx.conf
+        name: nginx-config
+      name: nginx-config
+    - configMap:
+        items:
+        - key: default.conf
+          path: default.conf
+        name: nginx-config
+      name: default-config
+    - configMap:
+        items:
+        - key: settings.php
+          path: settings.php
+        name: nginx-config
+      name: php-settings
+
+

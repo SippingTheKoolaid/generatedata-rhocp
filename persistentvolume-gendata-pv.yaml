@@ -1,0 +1,12 @@
+﻿kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: webserver-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ibmc-file-bronze-gid
+  volumeMode: Filesystem
