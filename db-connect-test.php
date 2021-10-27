@@ -1,11 +1,12 @@
 <?php
 # Fill our vars and run on cli
 # $ php -f db-connect-test.php
+require_once(__DIR__ . "/settings.php");
 
-$dbname = 'generatedata';
-$dbuser = 'root';
-$dbpass = 'pa55word';
-$dbhost = 'mysql';
+$dbname = $dbName; # 'generatedata';
+$dbuser = $dbUsername; #'root';
+$dbpass = $dbPassword; #'pa55word';
+$dbhost = $dbHostname; #'mysql';
 
 $link = mysqli_connect($dbhost, $dbuser, $dbpass) or die("Unable to Connect to '$dbhost'");
 mysqli_select_db($link, $dbname) or die("Could not open the db '$dbname'");
