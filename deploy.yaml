@@ -1,35 +1,46 @@
 apiVersion: v1
 items:
-- apiVersion: v1
-  kind: Pod
+- apiVersion: apps/v1
+  kind: Deployment
   metadata:
     labels:
       app: mysql
       primary: generate_data
     name: mysql
   spec:
-      containers:
-      - env:
-        - name: MYSQL_ROOT_PASSWORD
-          value: 5R2TO8AR
-        - name: MYSQL_DATABASE
-          value: generatedata
-        - name: MYSQL_USER
-          value: user1
-        - name: MYSQL_PASSWORD
-          value: O54MAPC8
-        image: mysql:8.0
-        name: mysql
-        ports:
-        - containerPort: 3306
-        volumeMounts:
-        - hostPath: /
-          mountPath: /var/lib/mysql
-          name: mysql-data
-      volumes:
-      - name: mysql-data
-        persistentVolumeClaim:
-          claimName: mysql-pvc
+    replicas: 1
+    selector:
+      matchLabels:
+        app: mysql
+    template:
+      metadata:
+        labels:
+          app: mysql
+      spec:
+        containers:
+        - env:
+          - name: MYSQL_ROOT_PASSWORD
+            value: 5R2TO8AR
+          - name: MYSQL_DATABASE
+            value: generatedata
+          - name: MYSQL_USER
+            value: user1
+          - name: MYSQL_PASSWORD
+            value: O54MAPC8
+          image: registry.redhat.io/rhel8/mysql-80
+          name: mysql
+          ports:
+          - containerPort: 3306
+          volumeMounts:
+          - hostPath: /
+            mountPath: /var/lib/mysql/data
+            name: mysql-data
+        volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-2-pvc
+        imagePullSecrets:
+        - name: 13162754-klm-ibm-pull-secret
 - apiVersion: v1
   data:
     default.conf: |
@@ -126,7 +137,7 @@ items:
 
           location ~ (\.php|/api/v1/data)$ {
             rewrite ^/api/v1/(.*)$ api/process.php?request=$1 break ;
-            fastcgi_pass  php-fpm:9000 ;
+            fastcgi_pass  ${PHP_FPM_SERVICE_HOST}:9000 ;
             fastcgi_index index.php ;
             fastcgi_param PATH_INFO $fastcgi_script_name ;
             fastcgi_param SCRIPT_FILENAME /application/$fastcgi_script_name ;
@@ -227,152 +238,172 @@ items:
         clear_env = no
         security.limit_extensions =
         request_terminate_timeout = 5m
-- apiVersion: v1
-  kind: Pod
+- apiVersion: apps/v1
+  kind: Deployment
   metadata:
     labels:
       app: php-fpm
       primary: generate_data
     name: php-fpm
   spec:
-    containers:
-    - image: bitnami/php-fpm:7.4
-      name: php-fpm
-      ports:
-      - containerPort: 9000
-      volumeMounts:
-      - hostPath: /
-        mountPath: /application
-        name: nfs-volume
-      - mountPath: /opt/bitnami/php/etc/php.ini
-        name: php-config
-        subPath: php.ini
-      - mountPath: /opt/bitnami/php/etc/php-fpm.d/www.conf
-        name: php-config
-        subPath: www.conf
-    initContainers:
-    - command:
-      - /bin/bash
-      - -c
-      - |
-        echo "updating www.conf"
-        sed -e 's/;request_terminate_timeout = 0/request_terminate_timeout = 5m/g' /opt/bitnami/php/etc/php-fpm.d/www.conf > /configs/www.conf
-        echo "updating php.ini"
-        sed -e 's/max_execution_time = 30/max_execution_time = 300/g' /opt/bitnami/php/etc/php.ini > /configs/php.ini
-        sed -e 's/memory_limit = 128M/memory_limit = 256M/g' -i /configs/php.ini
-        cd /
-        if [ -n "$(ls -A /generatedata-3.4.1 2>/dev/null)" ] 
-        then 
-          echo "Files exist, no download needed" 
-        else
-          echo "No files on shared volume, retrieving v3.4.1 from github"
-          wget https://github.com/benkeen/generatedata/archive/refs/tags/3.4.1.tar.gz
-          tar -xvf 3.4.1.tar.gz
-        fi
-        echo "Settings shared volume files to read/execute for everyone"
-          chmod -v 777 /generatedata-3.4.1
-        echo "Setting shared volume cache directory to read/write/execute for everyone"
-          chmod -Rv 777 /generatedata-3.4.1/cache
-      image: bitnami/php-fpm:7.4
-      name: updateconf
-      volumeMounts:
-      - mountPath: /configs
-        name: php-config
-      - mountPath: /generatedata-3.4.1
-        name: nfs-volume
-#      - mountPath: /opt/bitnami/php/etc/php-fpm.conf
-#        name: load-php-fpm
-#        subPath: php-fpm.conf
-#      - mountPath: /opt/bitnami/php/etc/php.ini
-#        name: load-php-ini
-#        subPath: php.ini
-    volumes:
-    - name: nfs-volume
-      persistentVolumeClaim:
-        claimName: webserver-pvc
-    - emptyDir: {}
-      name: php-config
-#    - configMap:
-#        items:
-#        - key: php.ini
-#          path: php.ini
-#        name: php-config
-#      name: load-php-ini 
-#    - configMap:
-#        items:
-#        - key: php-fpm.conf
-#          path: php-fpm.conf
-#        name: php-config
-#      name: load-php-fpm
-- apiVersion: v1
-  kind: Pod
+    replicas: 1
+    selector:
+      matchLabels:
+        app: php-fpm
+    template:
+      metadata:
+        labels:
+          app: php-fpm
+      spec:
+        containers:
+        - image: registry.redhat.io/codeready-workspaces/stacks-php-rhel8  #bitnami/php-fpm:7.4
+          name: php-fpm
+          ports:
+          - containerPort: 9000
+          volumeMounts:
+          - hostPath: /
+            mountPath: /application
+            name: nfs-volume
+          - mountPath: /opt/app-root/etc/php.ini
+            name: load-php-ini
+            subPath: php.ini
+          - mountPath: /opt/app-root/etc/conf.d/php-fpm.conf
+            name: load-php-fpm
+            subPath: php-fpm.conf
+#        initContainers:
+#        - command:
+#          - /bin/bash
+#          - -c
+#          - |
+#            echo "updating www.conf"
+#            sed -e 's/;request_terminate_timeout = 0/request_terminate_timeout = 5m/g' /opt/bitnami/php/etc/php-fpm.d/www.conf > /configs/www.conf
+#            echo "updating php.ini"
+#            sed -e 's/max_execution_time = 30/max_execution_time = 300/g' /opt/bitnami/php/etc/php.ini > /configs/php.ini
+#            sed -e 's/memory_limit = 128M/memory_limit = 256M/g' -i /configs/php.ini
+#            cd /
+#            if [ -n "$(ls -A /generatedata-3.4.1 2>/dev/null)" ] 
+#            then 
+#              echo "Files exist, no download needed" 
+#            else
+#              echo "No files on shared volume, retrieving v3.4.1 from github"
+#              wget https://github.com/benkeen/generatedata/archive/refs/tags/3.4.1.tar.gz
+#              tar -xvf 3.4.1.tar.gz
+#              echo "Settings shared volume files to read/execute for everyone"
+#              chmod -v 777 /generatedata-3.4.1
+#              echo "Setting shared volume cache directory to read/write/execute for everyone"
+#              chmod -Rv 777 /generatedata-3.4.1/cache
+#            fi
+#          image: registry.redhat.io/ubi8/php-73   # bitnami/php-fpm:7.4
+#          name: updateconf
+#          volumeMounts:
+#          - mountPath: /configs
+#            name: php-config
+#          - mountPath: /generatedata-3.4.1
+#            name: nfs-volume
+    #      - mountPath: /opt/bitnami/php/etc/php-fpm.conf
+    #        name: load-php-fpm
+    #        subPath: php-fpm.conf
+    #      - mountPath: /opt/bitnami/php/etc/php.ini
+    #        name: load-php-ini
+    #        subPath: php.ini
+        imagePullSecrets:
+        - name: 13162754-klm-ibm-pull-secret
+        volumes:
+        - name: nfs-volume
+          persistentVolumeClaim:
+            claimName: webserver-pvc
+#        - emptyDir: {}
+#          name: php-config
+        - configMap:
+            items:
+            - key: php.ini
+              path: php.ini
+            name: php-config
+          name: load-php-ini 
+        - configMap:
+            items:
+            - key: php-fpm.conf
+              path: php-fpm.conf
+            name: php-config
+          name: load-php-fpm
+- apiVersion: apps/v1
+  kind: Deployment
   metadata:
     labels:
       app: webserver
       primary: generate_data
     name: webserver
   spec:
-    containers:
-    - image: nginx:alpine
-      name: webserver
-      ports:
-      - containerPort: 8081
-      volumeMounts:
-      - hostPath: /
-        mountPath: /application
-        name: nfs-volume
-      - mountPath: /etc/nginx/nginx.conf
-        name: nginx-config
-        subPath: nginx.conf
-      - mountPath: /etc/nginx/conf.d
-        name: default-config
-    initContainers:
-    - command:
-      - /bin/sh
-      - -c
-      - |
-        cd /app
-        if [ -f "settings.php" ] 
-        then 
-          echo "settings.php file exists, it will not be updated" 
-        else
-          echo "settings.php missing, adding settings.php to shared volume for all containers to use"
-          cp -fv /php/settings.php /app/settings.php
-          chmod -Rv 755 /app/settings.php
-        fi
-      image: nginx:alpine
-      name: updatephp
-      volumeMounts:
-      - hostPath: /
-        mountPath: /app
-        name: nfs-volume
-      - mountPath: /php/settings.php
-        name: php-settings
-        subPath: settings.php
-    volumes:
-    - name: nfs-volume
-      persistentVolumeClaim:
-        claimName: webserver-pvc
-    - emptyDir: {}
-      name: update-php
-    - configMap:
-        items:
-        - key: nginx.conf
-          path: nginx.conf
-        name: nginx-config
-      name: nginx-config
-    - configMap:
-        items:
-        - key: default.conf
-          path: default.conf
-        name: nginx-config
-      name: default-config
-    - configMap:
-        items:
-        - key: settings.php
-          path: settings.php
-        name: nginx-config
-      name: php-settings
+    replicas: 1
+    selector:
+      matchLabels:
+        app: webserver
+    template:
+      metadata:
+        labels:
+          app: webserver
+      spec:
+        containers:
+        - image: nginx:alpine
+          name: webserver
+          ports:
+          - containerPort: 8081
+          volumeMounts:
+          - hostPath: /
+            mountPath: /application
+            name: nfs-volume
+          - mountPath: /etc/nginx/nginx.conf
+            name: nginx-config
+            subPath: nginx.conf
+          - mountPath: /etc/nginx/conf.d
+            name: default-config
+        initContainers:
+        - command:
+          - /bin/sh
+          - -c
+          - |
+            cd /app
+            if [ -f "settings.php" ] 
+            then 
+              echo "settings.php file exists, it will not be updated" 
+            else
+              echo "settings.php missing, adding settings.php to shared volume for all containers to use"
+              cp -fv /php/settings.php /app/settings.php
+              chmod -Rv 755 /app/settings.php
+            fi
+          image: nginx:alpine
+          name: updatephp
+          volumeMounts:
+          - hostPath: /
+            mountPath: /app
+            name: nfs-volume
+          - mountPath: /php/settings.php
+            name: php-settings
+            subPath: settings.php
+        volumes:
+        - name: nfs-volume
+          persistentVolumeClaim:
+            claimName: webserver-pvc
+        - emptyDir: {}
+          name: update-php
+        - configMap:
+            items:
+            - key: nginx.conf
+              path: nginx.conf
+            name: nginx-config
+          name: nginx-config
+        - configMap:
+            items:
+            - key: default.conf
+              path: default.conf
+            name: nginx-config
+          name: default-config
+        - configMap:
+            items:
+            - key: settings.php
+              path: settings.php
+            name: nginx-config
+          name: php-settings
 - apiVersion: v1
   kind: Service
   metadata:

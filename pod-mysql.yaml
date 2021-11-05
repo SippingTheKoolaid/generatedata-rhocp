@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: mysql
+    primary: generate_data
+  name: mysql
+spec:
+      containers:
+      - env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: 5R2TO8AR
+        - name: MYSQL_DATABASE
+          value: generatedata
+        - name: MYSQL_USER
+          value: user1
+        - name: MYSQL_PASSWORD
+          value: O54MAPC8
+        image: mysql:8.0 # registry.redhat.io/rhel8/mysql-80
+        name: mysql
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - hostPath: /
+          mountPath: /var/lib/mysql
+          name: mysql-data
+      volumes:
+      - name: mysql-data
+        persistentVolumeClaim:
+          claimName: test-mysql-pvc
+      imagePullSecrets:
+      - name: 13162754-klm-ibm-pull-secret
